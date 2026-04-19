@@ -39,6 +39,10 @@ jobs:
       - name: Prepare Lambda package
         run: npm run package:lambda
 
+      - name: Install production dependencies for Lambda
+        working-directory: build/lambda
+        run: npm ci --omit=dev
+
       - name: Create deployment archive
         working-directory: build/lambda
         run: zip -r ../lambda.zip .

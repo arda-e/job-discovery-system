@@ -7,7 +7,7 @@
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "check": "tsc --noEmit -p tsconfig.json",
-    "package:lambda": "rm -rf build/lambda && mkdir -p build/lambda && cp -R dist/. build/lambda/"
+    "package:lambda": "rm -rf build/lambda && mkdir -p build/lambda && cp -R dist/. build/lambda/ && cp package.json package-lock.json build/lambda/"
   },
   "engines": {
     "node": ">=22"
