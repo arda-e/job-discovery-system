@@ -4,6 +4,9 @@ import {
   type DiscoverInvocation
 } from "../app/run-discovery";
 
+/**
+ * Lambda entrypoint for discovery invocations.
+ */
 export const handler: Handler<DiscoverInvocation> = async (event = {}) => {
   const result = await runDiscovery(event);
 

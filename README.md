@@ -26,6 +26,15 @@ You can later invoke the Lambda with:
 
 That path currently returns a placeholder response and log line so the application skeleton can evolve without losing the fast smoke test.
 
+## Runtime configuration
+
+The Lambda now loads a minimal typed config from environment variables:
+
+- `APP_ENV`: `dev` or `prod`, defaults to `dev`
+- `LOG_LEVEL`: `debug`, `info`, `warn`, or `error`, defaults to `info`
+
+Smoke mode does not require any GitHub or discovery-specific runtime configuration yet. The invocation logs include a sanitized config summary so deploys are still easy to validate without exposing secrets.
+
 ## GitHub Actions deployment
 
 The workflow at `.github/workflows/deploy-lambda.yml` deploys on pushes to `main` and on manual runs.
