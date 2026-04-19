@@ -2,6 +2,7 @@ import {
   loadAppConfig,
   summarizeAppConfig
 } from "../config/env";
+import type { Logger } from "../util/logger";
 
 export type DiscoverMode = "smoke" | "discover";
 
@@ -12,6 +13,10 @@ export type DiscoverInvocation = {
 export type DiscoverResult = {
   message: string;
   mode: DiscoverMode;
+};
+
+export type RunDiscoveryDependencies = {
+  logger: Logger;
 };
 
 /**
@@ -31,10 +36,12 @@ const resolveMode = (invocation: DiscoverInvocation): DiscoverMode =>
 /**
  * Executes the smoke-test path used to validate deployments quickly.
  */
-const runSmokePath = async (): Promise<DiscoverResult> => {
-  console.log("hello");
+const runSmokePath = async (logger: Logger): Promise<DiscoverResult> => {
+  logger.info("smoke_path_started");
+  logger.info("smoke_log", { value: "hello" });
   await sleep(1_000);
-  console.log("world");
+  logger.info("smoke_log", { value: "world" });
+  logger.info("smoke_path_completed");
 
   return {
     message: "ok",
@@ -45,8 +52,8 @@ const runSmokePath = async (): Promise<DiscoverResult> => {
 /**
  * Placeholder application path for the future discovery workflow.
  */
-const runDiscoveryPath = async (): Promise<DiscoverResult> => {
-  console.log("discovery path is not implemented yet");
+const runDiscoveryPath = async (logger: Logger): Promise<DiscoverResult> => {
+  logger.info("discover_path_not_implemented");
 
   return {
     message: "discovery path not implemented",
@@ -58,19 +65,22 @@ const runDiscoveryPath = async (): Promise<DiscoverResult> => {
  * Runs the Lambda application for the requested invocation mode.
  */
 export const runDiscovery = async (
-  invocation: DiscoverInvocation
+  invocation: DiscoverInvocation,
+  dependencies: RunDiscoveryDependencies
 ): Promise<DiscoverResult> => {
   const mode = resolveMode(invocation);
   const config = loadAppConfig();
-  console.log("starting discovery invocation", {
+  dependencies.logger.info("discovery_started", {
     mode,
     config: summarizeAppConfig(config)
   });
 
   const result =
-    mode === "discover" ? await runDiscoveryPath() : await runSmokePath();
+    mode === "discover"
+      ? await runDiscoveryPath(dependencies.logger)
+      : await runSmokePath(dependencies.logger);
 
-  console.log("completed discovery invocation", {
+  dependencies.logger.info("discovery_completed", {
     mode: result.mode,
     config: summarizeAppConfig(config)
   });
