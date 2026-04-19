@@ -1,0 +1,76 @@
+name: Deploy Lambda
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  id-token: write
+  contents: read
+
+concurrency:
+  group: deploy-lambda-main
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    env:
+      AWS_REGION: ${{ vars.AWS_REGION }}
+      LAMBDA_FUNCTION_NAME: ${{ vars.LAMBDA_FUNCTION_NAME }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build TypeScript
+        run: npm run build
+
+      - name: Prepare Lambda package
+        run: npm run package:lambda
+
+      - name: Create deployment archive
+        working-directory: build/lambda
+        run: zip -r ../lambda.zip .
+
+      - name: Validate deploy settings
+        run: |
+          test -n "$AWS_REGION"
+          test -n "$LAMBDA_FUNCTION_NAME"
+          test -n "${{ secrets.AWS_DEPLOY_ROLE_ARN }}"
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v6.1.0
+        with:
+          aws-region: ${{ env.AWS_REGION }}
+          role-to-assume: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
+
+      - name: Update Lambda function code
+        run: |
+          aws lambda update-function-code \
+            --function-name "$LAMBDA_FUNCTION_NAME" \
+            --zip-file "fileb://build/lambda.zip"
+
+      - name: Wait for function update
+        run: aws lambda wait function-updated --function-name "$LAMBDA_FUNCTION_NAME"
+
+      - name: Ensure handler configuration
+        run: |
+          aws lambda update-function-configuration \
+            --function-name "$LAMBDA_FUNCTION_NAME" \
+            --runtime nodejs24.x \
+            --handler handler/discover.handler \
+            --timeout 5
+
+      - name: Wait for configuration update
+        run: aws lambda wait function-updated --function-name "$LAMBDA_FUNCTION_NAME"
