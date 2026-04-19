@@ -26,7 +26,7 @@ export const handler: Handler<DiscoverInvocation> = async (
   logger.info("invocation_started");
 
   try {
-    const result = await runDiscovery(event, { logger });
+    const result = await runDiscovery(event, { config, logger });
     logger.info("invocation_completed", {
       durationMs: Date.now() - startedAt,
       result: result.message

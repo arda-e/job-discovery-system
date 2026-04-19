@@ -1,5 +1,5 @@
 import {
-  loadAppConfig,
+  type AppConfig,
   summarizeAppConfig
 } from "../config/env";
 import type { Logger } from "../util/logger";
@@ -16,6 +16,7 @@ export type DiscoverResult = {
 };
 
 export type RunDiscoveryDependencies = {
+  config: AppConfig;
   logger: Logger;
 };
 
@@ -69,10 +70,9 @@ export const runDiscovery = async (
   dependencies: RunDiscoveryDependencies
 ): Promise<DiscoverResult> => {
   const mode = resolveMode(invocation);
-  const config = loadAppConfig();
   dependencies.logger.info("discovery_started", {
     mode,
-    config: summarizeAppConfig(config)
+    config: summarizeAppConfig(dependencies.config)
   });
 
   const result =
@@ -82,7 +82,7 @@ export const runDiscovery = async (
 
   dependencies.logger.info("discovery_completed", {
     mode: result.mode,
-    config: summarizeAppConfig(config)
+    config: summarizeAppConfig(dependencies.config)
   });
   return result;
 };
