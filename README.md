@@ -4,11 +4,27 @@ Current scope: a minimal Lambda scaffold plus GitHub Actions deployment to an ex
 
 ## Current behavior
 
-The handler in `src/handler/discover.ts`:
+The handler in `src/handler/discover.ts` delegates into `src/app/run-discovery.ts`.
+
+By default, the Lambda runs a smoke path:
 
 - logs `hello`
 - waits 1 second
 - logs `world`
+
+The default response body is:
+
+```json
+{"message":"ok","mode":"smoke"}
+```
+
+You can later invoke the Lambda with:
+
+```json
+{"mode":"discover"}
+```
+
+That path currently returns a placeholder response and log line so the application skeleton can evolve without losing the fast smoke test.
 
 ## GitHub Actions deployment
 

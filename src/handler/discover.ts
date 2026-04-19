@@ -1,17 +1,14 @@
 import type { Handler } from "aws-lambda";
+import {
+  runDiscovery,
+  type DiscoverInvocation
+} from "../app/run-discovery";
 
-const sleep = (ms: number): Promise<void> =>
-  new Promise((resolve) => {
-    setTimeout(resolve, ms);
-  });
-
-export const handler: Handler = async () => {
-  console.log("hello");
-  await sleep(1_000);
-  console.log("world");
+export const handler: Handler<DiscoverInvocation> = async (event = {}) => {
+  const result = await runDiscovery(event);
 
   return {
     statusCode: 200,
-    body: JSON.stringify({ message: "ok" })
+    body: JSON.stringify(result)
   };
 };
