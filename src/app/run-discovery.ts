@@ -4,6 +4,7 @@ import {
   summarizeAppConfig
 } from "../config/env";
 import { getExaApiKeyFromSecret } from "../integrations/aws/secrets";
+import { getExaContents } from "../sources/search/exa";
 import type { Logger } from "../util/logger";
 
 export type DiscoverMode = "smoke" | "discover";
@@ -21,6 +22,8 @@ export type RunDiscoveryDependencies = {
   config: AppConfig;
   logger: Logger;
 };
+
+const EXA_SMOKE_TEST_URL = "https://openai.com";
 
 /**
  * Waits for the given number of milliseconds.
@@ -66,10 +69,26 @@ const runDiscoveryPath = async (logger: Logger): Promise<DiscoverResult> => {
     exaSecretConfigured: Boolean(discoverConfig.exaSecretId)
   });
 
-  logger.info("discover_path_not_implemented");
+  logger.info("exa_contents_request_started", {
+    url: EXA_SMOKE_TEST_URL
+  });
+
+  const exaResponse = await getExaContents(exaApiKey as string, {
+    urls: [EXA_SMOKE_TEST_URL],
+    maxCharacters: 4_000
+  });
+
+  const firstResult = exaResponse.results[0];
+
+  logger.info("exa_contents_request_completed", {
+    resultCount: exaResponse.results.length,
+    firstResultTitle: firstResult?.title,
+    firstResultUrl: firstResult?.url,
+    firstHighlightsCount: firstResult?.highlights?.length ?? 0
+  });
 
   return {
-    message: "discovery path not implemented",
+    message: "discover mode exa probe completed",
     mode: "discover"
   };
 };
