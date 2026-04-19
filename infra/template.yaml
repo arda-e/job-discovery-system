@@ -1,0 +1,14 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Transform: AWS::Serverless-2016-10-31
+Description: Job discovery system Lambda scaffold.
+
+Resources:
+  DiscoverFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: job-discovery-system-discover
+      Runtime: nodejs24.x
+      Handler: dist/handler/discover.handler
+      CodeUri: ../
+      MemorySize: 128
+      Timeout: 5

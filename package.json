@@ -1,0 +1,20 @@
+{
+  "name": "job-discovery-system",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Serverless job discovery system scaffold.",
+  "type": "commonjs",
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "check": "tsc --noEmit -p tsconfig.json",
+    "package:lambda": "rm -rf build/lambda && mkdir -p build/lambda && cp -R dist/. build/lambda/"
+  },
+  "engines": {
+    "node": ">=22"
+  },
+  "devDependencies": {
+    "@types/aws-lambda": "^8.10.147",
+    "@types/node": "^22.15.3",
+    "typescript": "^5.8.3"
+  }
+}
