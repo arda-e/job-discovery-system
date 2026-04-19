@@ -1,7 +1,9 @@
 import {
   type AppConfig,
+  loadDiscoverConfig,
   summarizeAppConfig
 } from "../config/env";
+import { getExaApiKeyFromSecret } from "../integrations/aws/secrets";
 import type { Logger } from "../util/logger";
 
 export type DiscoverMode = "smoke" | "discover";
@@ -54,6 +56,16 @@ const runSmokePath = async (logger: Logger): Promise<DiscoverResult> => {
  * Placeholder application path for the future discovery workflow.
  */
 const runDiscoveryPath = async (logger: Logger): Promise<DiscoverResult> => {
+  const discoverConfig = loadDiscoverConfig();
+  const exaApiKey = discoverConfig.exaSecretId
+    ? await getExaApiKeyFromSecret(discoverConfig.exaSecretId)
+    : discoverConfig.exaApiKey;
+
+  logger.info("discover_path_config_loaded", {
+    exaConfigured: Boolean(exaApiKey),
+    exaSecretConfigured: Boolean(discoverConfig.exaSecretId)
+  });
+
   logger.info("discover_path_not_implemented");
 
   return {

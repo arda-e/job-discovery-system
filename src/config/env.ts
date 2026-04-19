@@ -3,12 +3,19 @@ export type LogLevel = "debug" | "info" | "warn" | "error";
 
 export type RawEnv = {
   APP_ENV?: string;
+  EXA_API_KEY?: string;
+  EXA_SECRET_ID?: string;
   LOG_LEVEL?: string;
 };
 
 export type AppConfig = {
   appEnv: AppEnv;
   logLevel: LogLevel;
+};
+
+export type DiscoverConfig = {
+  exaApiKey?: string;
+  exaSecretId?: string;
 };
 
 const APP_ENVS: AppEnv[] = ["dev", "prod"];
@@ -51,3 +58,21 @@ export const summarizeAppConfig = (config: AppConfig): Record<string, string> =>
   appEnv: config.appEnv,
   logLevel: config.logLevel
 });
+
+/**
+ * Loads discover-mode configuration and fails fast when required values are missing.
+ */
+export const loadDiscoverConfig = (
+  env: RawEnv = process.env
+): DiscoverConfig => {
+  if (!env.EXA_SECRET_ID && !env.EXA_API_KEY) {
+    throw new Error(
+      "Missing discover credentials: set EXA_SECRET_ID or EXA_API_KEY"
+    );
+  }
+
+  return {
+    exaApiKey: env.EXA_API_KEY,
+    exaSecretId: env.EXA_SECRET_ID
+  };
+};

@@ -32,8 +32,20 @@ The Lambda now loads a minimal typed config from environment variables:
 
 - `APP_ENV`: `dev` or `prod`, defaults to `dev`
 - `LOG_LEVEL`: `debug`, `info`, `warn`, or `error`, defaults to `info`
+- `EXA_SECRET_ID`: preferred for `discover` mode, points to an AWS Secrets Manager secret
+- `EXA_API_KEY`: fallback for local development or temporary bootstrap only
 
 Smoke mode does not require any GitHub or discovery-specific runtime configuration yet. The invocation logs include a sanitized config summary so deploys are still easy to validate without exposing secrets.
+
+For this project, the intended production source of truth for API credentials is AWS Secrets Manager. The Lambda now prefers `EXA_SECRET_ID` and expects the referenced secret JSON to contain:
+
+```json
+{
+  "EXA_API_KEY": "your-api-key"
+}
+```
+
+Use plain `EXA_API_KEY` only as a minimal local-development or temporary bootstrap path.
 
 ## GitHub Actions deployment
 
