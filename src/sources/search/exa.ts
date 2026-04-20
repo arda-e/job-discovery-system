@@ -1,17 +1,11 @@
 import Exa from "exa-js";
+import type { DiscoveryCandidate } from "../../domain/discovery-candidate";
 
 export type ExaSearchInput = {
   query: string;
   maxCharacters?: number;
   numResults?: number;
   type?: "auto" | "fast" | "instant" | "deep-lite" | "deep" | "deep-reasoning";
-};
-
-export type NormalizedExaResult = {
-  title?: string;
-  url: string;
-  publishedDate?: string;
-  highlightPreview?: string;
 };
 
 /**
@@ -46,7 +40,7 @@ export const normalizeExaResults = (
     publishedDate?: string;
     highlights?: string[];
   }>
-): NormalizedExaResult[] =>
+): DiscoveryCandidate[] =>
   results.map((result) => ({
     title: result.title ?? undefined,
     url: result.url,
