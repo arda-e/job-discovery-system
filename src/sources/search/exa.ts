@@ -1,8 +1,17 @@
 import Exa from "exa-js";
 
-export type ExaGetContentsInput = {
-  urls: string[];
+export type ExaSearchInput = {
+  query: string;
   maxCharacters?: number;
+  numResults?: number;
+  type?: "auto" | "fast" | "instant" | "deep-lite" | "deep" | "deep-reasoning";
+};
+
+export type NormalizedExaResult = {
+  title?: string;
+  url: string;
+  publishedDate?: string;
+  highlightPreview?: string;
 };
 
 /**
@@ -11,14 +20,36 @@ export type ExaGetContentsInput = {
 export const createExaClient = (apiKey: string): Exa => new Exa(apiKey);
 
 /**
- * Fetches document contents from Exa for a set of known URLs.
+ * Runs a search request through Exa with highlight contents enabled.
  */
-export const getExaContents = async (
+export const searchExa = async (
   apiKey: string,
-  input: ExaGetContentsInput
+  input: ExaSearchInput
 ) =>
-  createExaClient(apiKey).getContents(input.urls, {
-    highlights: {
-      maxCharacters: input.maxCharacters ?? 4_000
+  createExaClient(apiKey).search(input.query, {
+    type: input.type ?? "deep",
+    numResults: input.numResults ?? 3,
+    contents: {
+      highlights: {
+        maxCharacters: input.maxCharacters ?? 4_000
+      }
     }
   });
+
+/**
+ * Normalizes Exa search results into a small logging-friendly shape.
+ */
+export const normalizeExaResults = (
+  results: Array<{
+    title?: string | null;
+    url: string;
+    publishedDate?: string;
+    highlights?: string[];
+  }>
+): NormalizedExaResult[] =>
+  results.map((result) => ({
+    title: result.title ?? undefined,
+    url: result.url,
+    publishedDate: result.publishedDate,
+    highlightPreview: result.highlights?.[0]
+  }));

@@ -4,7 +4,10 @@ import {
   summarizeAppConfig
 } from "../config/env";
 import { getExaApiKeyFromSecret } from "../integrations/aws/secrets";
-import { getExaContents } from "../sources/search/exa";
+import {
+  normalizeExaResults,
+  searchExa
+} from "../sources/search/exa";
 import type { Logger } from "../util/logger";
 
 export type DiscoverMode = "smoke" | "discover";
@@ -23,7 +26,8 @@ export type RunDiscoveryDependencies = {
   logger: Logger;
 };
 
-const EXA_SMOKE_TEST_URL = "https://openai.com";
+const EXA_DISCOVER_QUERY =
+  "site:jobs.lever.co software engineer remote typescript";
 
 /**
  * Waits for the given number of milliseconds.
@@ -69,26 +73,27 @@ const runDiscoveryPath = async (logger: Logger): Promise<DiscoverResult> => {
     exaSecretConfigured: Boolean(discoverConfig.exaSecretId)
   });
 
-  logger.info("exa_contents_request_started", {
-    url: EXA_SMOKE_TEST_URL
+  logger.info("exa_search_request_started", {
+    query: EXA_DISCOVER_QUERY
   });
 
-  const exaResponse = await getExaContents(exaApiKey as string, {
-    urls: [EXA_SMOKE_TEST_URL],
-    maxCharacters: 4_000
+  const exaResponse = await searchExa(exaApiKey as string, {
+    query: EXA_DISCOVER_QUERY,
+    maxCharacters: 1_500,
+    numResults: 3,
+    type: "deep"
   });
 
-  const firstResult = exaResponse.results[0];
+  const normalizedResults = normalizeExaResults(exaResponse.results);
+  const topResults = normalizedResults.slice(0, 3);
 
-  logger.info("exa_contents_request_completed", {
+  logger.info("exa_search_request_completed", {
     resultCount: exaResponse.results.length,
-    firstResultTitle: firstResult?.title,
-    firstResultUrl: firstResult?.url,
-    firstHighlightsCount: firstResult?.highlights?.length ?? 0
+    topResults
   });
 
   return {
-    message: "discover mode exa probe completed",
+    message: "discover mode exa search completed",
     mode: "discover"
   };
 };
