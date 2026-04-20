@@ -85,6 +85,10 @@ Paste-ready examples are included here:
 
 - [github-actions-oidc-trust-policy.json](/Users/arda/Desktop/development/job-discovery-system/infra/github-actions-oidc-trust-policy.json)
 - [github-actions-deploy-policy.json](/Users/arda/Desktop/development/job-discovery-system/infra/github-actions-deploy-policy.json)
+- [lambda-execution-secrets-policy.json](/Users/arda/Desktop/development/job-discovery-system/infra/lambda-execution-secrets-policy.json)
+- [eventbridge-scheduler-trust-policy.json](/Users/arda/Desktop/development/job-discovery-system/infra/eventbridge-scheduler-trust-policy.json)
+- [eventbridge-scheduler-invoke-policy.json](/Users/arda/Desktop/development/job-discovery-system/infra/eventbridge-scheduler-invoke-policy.json)
+- [infra/README.md](/Users/arda/Desktop/development/job-discovery-system/infra/README.md)
 
 Replace these placeholders before creating the role and policy:
 - `<AWS_ACCOUNT_ID>`
