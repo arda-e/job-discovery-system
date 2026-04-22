@@ -10,9 +10,6 @@ export const DEFAULT_TITLE_KEYWORD_FILTER: TitleKeywordFilterConfig = {
   exclude: ["senior", "staff", "principal", "lead", "manager", "director"]
 };
 
-/**
- * Creates a pluggable title keyword filter for discovery candidates.
- */
 export const createTitleKeywordFilter = (
   config: TitleKeywordFilterConfig = DEFAULT_TITLE_KEYWORD_FILTER
 ): CandidateFilter => ({

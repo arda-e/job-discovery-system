@@ -8,7 +8,7 @@ The repository is currently in the planning phase. Most of the existing content 
 
 ## Current Source of Truth
 
-- Requirements: `2026-04-19-job-discovery-system-architecture-requirements.md`
+- Requirements: `docs/project/2026-04-19-job-discovery-system-architecture-requirements.md`
 - Plan: `docs/plans/2026-04-19-001-feat-job-discovery-system-plan.md`
 - External reference notes: `docs/reference/`
 
@@ -38,7 +38,7 @@ Until code exists, do not assume file paths beyond what is documented in the pla
 ## Documentation Rules
 
 - Keep architecture or policy changes reflected in both:
-  - `2026-04-19-job-discovery-system-architecture-requirements.md`
+  - `docs/project/2026-04-19-job-discovery-system-architecture-requirements.md`
   - `docs/plans/2026-04-19-001-feat-job-discovery-system-plan.md`
 - Add new vendor or API research under `docs/reference/` rather than scattering notes through random files.
 

@@ -8,42 +8,44 @@ export type ExaSearchInput = {
   type?: "auto" | "fast" | "instant" | "deep-lite" | "deep" | "deep-reasoning";
 };
 
-/**
- * Creates a minimal Exa SDK client for discovery integrations.
- */
-export const createExaClient = (apiKey: string): Exa => new Exa(apiKey);
+export class ExaSearchAdapter {
+  private readonly client: Exa;
 
-/**
- * Runs a search request through Exa with highlight contents enabled.
- */
-export const searchExa = async (
-  apiKey: string,
-  input: ExaSearchInput
-) =>
-  createExaClient(apiKey).search(input.query, {
-    type: input.type ?? "deep",
-    numResults: input.numResults ?? 3,
-    contents: {
-      highlights: {
-        maxCharacters: input.maxCharacters ?? 4_000
+  constructor(apiKey: string) {
+    this.client = new Exa(apiKey);
+  }
+
+  /**
+   * Runs a search request through Exa with highlight contents enabled.
+   */
+  async search(input: ExaSearchInput) {
+    return this.client.search(input.query, {
+      type: input.type ?? "deep",
+      numResults: input.numResults ?? 3,
+      contents: {
+        highlights: {
+          maxCharacters: input.maxCharacters ?? 4_000
+        }
       }
-    }
-  });
+    });
+  }
 
-/**
- * Normalizes Exa search results into a small logging-friendly shape.
- */
-export const normalizeExaResults = (
-  results: Array<{
-    title?: string | null;
-    url: string;
-    publishedDate?: string;
-    highlights?: string[];
-  }>
-): DiscoveryCandidate[] =>
-  results.map((result) => ({
-    title: result.title ?? undefined,
-    url: result.url,
-    publishedDate: result.publishedDate,
-    highlightPreview: result.highlights?.[0]
-  }));
+  /**
+   * Normalizes Exa search results into a small logging-friendly shape.
+   */
+  normalizeResults(
+    results: Array<{
+      title?: string | null;
+      url: string;
+      publishedDate?: string;
+      highlights?: string[];
+    }>
+  ): DiscoveryCandidate[] {
+    return results.map((result) => ({
+      title: result.title ?? undefined,
+      url: result.url,
+      publishedDate: result.publishedDate,
+      highlightPreview: result.highlights?.[0]
+    }));
+  }
+}

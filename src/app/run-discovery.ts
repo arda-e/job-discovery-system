@@ -1,8 +1,10 @@
 import {
   type AppConfig,
+  type DiscoverConfig,
   loadDiscoverConfig,
   summarizeAppConfig
 } from "../config/env";
+import { groupCandidatesByCompany } from "../domain/company-grouper";
 import {
   evaluateCandidates
 } from "../domain/filters/pipeline";
@@ -11,11 +13,10 @@ import {
   DEFAULT_TITLE_KEYWORD_FILTER,
   type TitleKeywordFilterConfig
 } from "../domain/filters/title-keyword-filter";
-import { getExaApiKeyFromSecret } from "../integrations/aws/secrets";
+import { secretsService } from "../integrations/aws/secrets";
 import {
-  normalizeExaResults,
+  ExaSearchAdapter,
   type ExaSearchInput,
-  searchExa
 } from "../sources/search/exa";
 import type { Logger } from "../util/logger";
 
@@ -35,6 +36,17 @@ export type DiscoverResult = {
 export type RunDiscoveryDependencies = {
   config: AppConfig;
   logger: Logger;
+};
+
+export type DiscoveryRunContext = {
+  appConfig: AppConfig;
+  discoverConfig?: DiscoverConfig;
+  exaApiKey?: string;
+  exaSearchInput?: ExaSearchInput;
+  invocation: DiscoverInvocation;
+  logger: Logger;
+  mode: DiscoverMode;
+  titleKeywordFilterConfig?: TitleKeywordFilterConfig;
 };
 
 const EXA_DISCOVER_QUERY =
@@ -87,6 +99,43 @@ const resolveTitleKeywordFilterConfig = (
 });
 
 /**
+ * Resolves all run-scoped discovery inputs once before execution.
+ */
+const createDiscoveryRunContext = async (
+  invocation: DiscoverInvocation,
+  dependencies: RunDiscoveryDependencies
+): Promise<DiscoveryRunContext> => {
+  const mode = resolveMode(invocation);
+
+  if (mode !== "discover") {
+    return {
+      appConfig: dependencies.config,
+      invocation,
+      logger: dependencies.logger,
+      mode
+    };
+  }
+
+  const discoverConfig = loadDiscoverConfig();
+  const exaSearchInput = resolveExaSearchInput(invocation);
+  const titleKeywordFilterConfig = resolveTitleKeywordFilterConfig(invocation);
+  const exaApiKey = discoverConfig.exaSecretId
+    ? await secretsService.getExaApiKey(discoverConfig.exaSecretId)
+    : discoverConfig.exaApiKey;
+
+  return {
+    appConfig: dependencies.config,
+    discoverConfig,
+    exaApiKey,
+    exaSearchInput,
+    invocation,
+    logger: dependencies.logger,
+    mode,
+    titleKeywordFilterConfig
+  };
+};
+
+/**
  * Executes the smoke-test path used to validate deployments quickly.
  */
 const runSmokePath = async (logger: Logger): Promise<DiscoverResult> => {
@@ -106,37 +155,36 @@ const runSmokePath = async (logger: Logger): Promise<DiscoverResult> => {
  * Placeholder application path for the future discovery workflow.
  */
 const runDiscoveryPath = async (
-  invocation: DiscoverInvocation,
-  logger: Logger
+  context: DiscoveryRunContext
 ): Promise<DiscoverResult> => {
-  const discoverConfig = loadDiscoverConfig();
-  const exaSearchInput = resolveExaSearchInput(invocation);
-  const titleKeywordFilterConfig = resolveTitleKeywordFilterConfig(invocation);
-  const exaApiKey = discoverConfig.exaSecretId
-    ? await getExaApiKeyFromSecret(discoverConfig.exaSecretId)
-    : discoverConfig.exaApiKey;
+  const discoverConfig = context.discoverConfig as DiscoverConfig;
+  const exaApiKey = context.exaApiKey as string;
+  const exaSearchInput = context.exaSearchInput as ExaSearchInput;
+  const titleKeywordFilterConfig =
+    context.titleKeywordFilterConfig as TitleKeywordFilterConfig;
+  const exaSearchAdapter = new ExaSearchAdapter(exaApiKey);
 
-  logger.info("discover_path_config_loaded", {
+  context.logger.info("discover_path_config_loaded", {
     exaConfigured: Boolean(exaApiKey),
     exaSecretConfigured: Boolean(discoverConfig.exaSecretId)
   });
 
-  logger.info("exa_search_request_started", {
+  context.logger.info("exa_search_request_started", {
     maxCharacters: exaSearchInput.maxCharacters,
     numResults: exaSearchInput.numResults,
     query: exaSearchInput.query,
     type: exaSearchInput.type
   });
 
-  const exaResponse = await searchExa(exaApiKey as string, exaSearchInput);
-
-  const normalizedResults = normalizeExaResults(exaResponse.results);
+  const exaResponse = await exaSearchAdapter.search(exaSearchInput);
+  const normalizedResults = exaSearchAdapter.normalizeResults(exaResponse.results);
   const evaluations = evaluateCandidates(normalizedResults, [
     createTitleKeywordFilter(titleKeywordFilterConfig)
   ]);
   const includedResults = evaluations
     .filter((evaluation) => evaluation.accepted)
     .map((evaluation) => evaluation.candidate);
+  const groupedCompanies = groupCandidatesByCompany(includedResults);
   const excludedResults = evaluations
     .filter((evaluation) => !evaluation.accepted)
     .slice(0, 3)
@@ -147,18 +195,23 @@ const runDiscoveryPath = async (
       url: evaluation.candidate.url
     }));
 
-  logger.info("exa_search_request_completed", {
+  context.logger.info("exa_search_request_completed", {
     resultCount: exaResponse.results.length,
     topResults: normalizedResults.slice(0, 3)
   });
 
-  logger.info("title_keyword_filter_completed", {
+  context.logger.info("title_keyword_filter_completed", {
     excludedCount: evaluations.length - includedResults.length,
     includeKeywords: titleKeywordFilterConfig.include,
     includedCount: includedResults.length,
     excludeKeywords: titleKeywordFilterConfig.exclude,
     includedResults: includedResults.slice(0, 3),
     excludedResults
+  });
+
+  context.logger.info("company_grouping_completed", {
+    groupedCompanyCount: groupedCompanies.length,
+    groupedCompanies: groupedCompanies.slice(0, 3)
   });
 
   return {
@@ -174,20 +227,21 @@ export const runDiscovery = async (
   invocation: DiscoverInvocation,
   dependencies: RunDiscoveryDependencies
 ): Promise<DiscoverResult> => {
-  const mode = resolveMode(invocation);
-  dependencies.logger.info("discovery_started", {
-    mode,
-    config: summarizeAppConfig(dependencies.config)
+  const context = await createDiscoveryRunContext(invocation, dependencies);
+
+  context.logger.info("discovery_started", {
+    mode: context.mode,
+    config: summarizeAppConfig(context.appConfig)
   });
 
   const result =
-    mode === "discover"
-      ? await runDiscoveryPath(invocation, dependencies.logger)
-      : await runSmokePath(dependencies.logger);
+    context.mode === "discover"
+      ? await runDiscoveryPath(context)
+      : await runSmokePath(context.logger);
 
-  dependencies.logger.info("discovery_completed", {
+  context.logger.info("discovery_completed", {
     mode: result.mode,
-    config: summarizeAppConfig(dependencies.config)
+    config: summarizeAppConfig(context.appConfig)
   });
   return result;
 };
