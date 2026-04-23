@@ -68,13 +68,14 @@ jobs:
       - name: Wait for function update
         run: aws lambda wait function-updated --function-name "$LAMBDA_FUNCTION_NAME"
 
-      - name: Ensure handler configuration
+      - name: Ensure handler and environment configuration
         run: |
           aws lambda update-function-configuration \
             --function-name "$LAMBDA_FUNCTION_NAME" \
             --runtime nodejs24.x \
             --handler handler/discover.handler \
-            --timeout 5
+            --timeout 5 \
+            --environment "Variables={DISCOVERY_ROLE_KEYWORDS=${DISCOVERY_ROLE_KEYWORDS:-software engineer},DISCOVERY_EXCLUDED_ROLE_KEYWORDS=${DISCOVERY_EXCLUDED_ROLE_KEYWORDS:-},DISCOVERY_LOCATION_CONSTRAINTS=${DISCOVERY_LOCATION_CONSTRAINTS:-remote},DISCOVERY_COMPANY_PREFERENCES=${DISCOVERY_COMPANY_PREFERENCES:-},DISCOVERY_PRODUCT_SURFACE_PREFERENCE=${DISCOVERY_PRODUCT_SURFACE_PREFERENCE:-},DISCOVERY_END_TO_END_OWNERSHIP=${DISCOVERY_END_TO_END_OWNERSHIP:-false},DISCOVERY_PREFERRED_TECH_STACK=${DISCOVERY_PREFERRED_TECH_STACK:-}}"
 
       - name: Wait for configuration update
         run: aws lambda wait function-updated --function-name "$LAMBDA_FUNCTION_NAME"
