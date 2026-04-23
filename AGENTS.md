@@ -2,54 +2,46 @@
 
 ## Project
 
-This repository is for the `job-discovery-system` project: a serverless discovery layer that finds relevant job opportunities and appends normalized entries into a shared `portals.yml` contract consumed by `career-ops`.
+This repository is for the `job-discovery-system` project: a serverless discovery worker that finds relevant job opportunities for `career-ops`.
 
-The repository is currently in the planning phase. Most of the existing content is requirements, implementation planning, and condensed API reference notes.
+The tracked repository now focuses on the runnable worker, tests, deployment flow, and public-facing architecture summary in [README.md](/Users/arda/Desktop/development/job-discovery-system/README.md).
 
-## Current Source of Truth
+## Public Source Of Truth
 
-- Requirements: `docs/project/2026-04-19-job-discovery-system-architecture-requirements.md`
-- Plan: `docs/plans/2026-04-19-001-feat-job-discovery-system-plan.md`
-- External reference notes: `docs/reference/`
+- Public overview and deploy/use guidance: [README.md](/Users/arda/Desktop/development/job-discovery-system/README.md)
+- The tracked architecture requirements document in the repository
+- The tracked future-architecture note in the repository, when present
 
-When planning or implementing, treat the requirements doc as the product source of truth and the plan as the current implementation guide.
+Detailed planning notes and condensed vendor reference notes may exist locally, but they are intentionally not part of the tracked remote repository.
 
 ## Expected Architecture
 
-The planned system has these major areas:
+The implemented and planned system centers on:
 
-- contract and config parsing
-- ATS adapters
-- Brave and Exa search adapters
-- policy engine for eligibility, scoring, and suppression
-- GitHub writer and seen-cache state
-- Lambda handler and infrastructure
-
-Until code exists, do not assume file paths beyond what is documented in the plan.
+- Lambda handler and runtime config
+- search adapters
+- candidate filtering and aggregation
+- future dedupe and append-only write path for `portals.yml`
+- infrastructure for deploy, secrets, and scheduling
 
 ## Working Rules
 
 - Preserve the append-only contract for `portals.yml`.
-- Do not weaken the canonical `company_slug` identity model without explicitly updating the requirements and plan.
+- Do not weaken the canonical `company_slug` identity model without explicitly updating the requirements doc.
 - Treat non-ATS discoveries as leads, not normal scan targets, unless the requirements change.
 - Keep secrets out of source control.
 - Prefer deterministic writes and dry-run-safe behavior for any write-path work.
 
 ## Documentation Rules
 
-- Keep architecture or policy changes reflected in both:
-  - `docs/project/2026-04-19-job-discovery-system-architecture-requirements.md`
-  - `docs/plans/2026-04-19-001-feat-job-discovery-system-plan.md`
-- Add new vendor or API research under `docs/reference/` rather than scattering notes through random files.
+- Keep public behavior, deploy flow, and usage instructions reflected in `README.md`.
+- Keep architecture and policy changes reflected in the tracked architecture requirements document.
+- Add new tracked technical docs under a stable public docs path or `infra/` when they are meant to stay in the public repository.
 
 ## Implementation Notes
 
-- The plan currently assumes a Node.js/TypeScript Lambda on `nodejs24.x`.
+- The deploy workflow configures the Lambda as `nodejs24.x`.
 - EventBridge Scheduler is the intended scheduling surface.
-- GitHub Contents API is the intended write mechanism.
-- S3 is the intended store for the seen-cache.
+- GitHub Contents API is the intended write mechanism once the append path is implemented.
+- S3 is the intended store for the seen-cache once persistence is added.
 - Secrets Manager is the intended store for API credentials.
-
-## Status
-
-This file is intentionally a skeleton. Expand it as the repository gains real source files, scripts, deployment tooling, and test conventions.

@@ -1,115 +1,168 @@
 # job-discovery-system
 
-Current scope: a minimal Lambda scaffold plus GitHub Actions deployment to an existing AWS Lambda function.
+`job-discovery-system` is a serverless discovery worker for `career-ops`. It runs on a schedule, searches for relevant job opportunities, filters low-signal results, groups evidence by company, and is being extended toward append-only writes into the shared `portals.yml` contract that `career-ops` already consumes.
 
-## Current behavior
+The current tracked repository contains the runnable Lambda scaffold, the Exa-backed discovery prototype, characterization tests, deployment workflow, and IAM artifacts. Detailed private planning and vendor-note documents are intentionally kept local and are not part of the tracked remote history.
 
-The handler in `src/handler/discover.ts` delegates into `src/app/run-discovery.ts`.
+## System
 
-By default, the Lambda runs a smoke path:
+```mermaid
+flowchart TB
+    A["EventBridge schedule"] --> B["Lambda handler"]
+    B --> C["Load app config and discovery secrets"]
+    C --> D["Run search adapter"]
+    D --> E["Normalize raw results into discovery candidates"]
+    E --> F["Apply title and policy filters"]
+    F --> G["Group accepted evidence by company"]
+    G --> H["Future: dedupe against seen state and portals.yml"]
+    H --> I["Append-only update for career-ops"]
+```
 
-- logs `hello`
-- waits 1 second
-- logs `world`
+## What This Is
 
-The default response body is:
+- A Node.js and TypeScript AWS Lambda worker.
+- A scheduled discovery layer that is meant to run without your laptop being online.
+- A prototype pipeline that already supports smoke runs, typed runtime config, AWS Secrets Manager loading, Exa search retrieval, title filtering, company grouping, and Jest characterization coverage.
+- A repository that is still missing the final append writer, GitHub Contents API write path, and seen-cache persistence.
+
+## What This Is Not
+
+- Not a full control plane or multi-tenant product.
+- Not yet the complete append-to-`portals.yml` implementation.
+- Not an application/evaluation system; `career-ops` still owns downstream scanning and decision-making.
+
+## Repository Layout
+
+- `src/handler/discover.ts`: Lambda entrypoint.
+- `src/app/run-discovery.ts`: smoke mode and current discovery orchestration.
+- `src/domain/filters/`: hard-filter logic.
+- `src/domain/aggregation/`: grouping pipeline for accepted candidates.
+- `src/sources/search/exa.ts`: Exa adapter and normalization.
+- `test/`: characterization coverage for the current prototype path.
+- `infra/`: IAM policy documents, trust policies, and SAM template.
+- `.github/workflows/deploy-lambda.yml`: CI deploy workflow.
+
+## Deploy
+
+The supported deployment path is GitHub Actions plus AWS OIDC.
+
+1. Create the GitHub OIDC identity provider in AWS for `https://token.actions.githubusercontent.com` if it does not already exist.
+2. Create a GitHub Actions deploy role with:
+   - trust policy: [infra/github-actions-oidc-trust-policy.json](/Users/arda/Desktop/development/job-discovery-system/infra/github-actions-oidc-trust-policy.json)
+   - deploy policy: [infra/github-actions-deploy-policy.json](/Users/arda/Desktop/development/job-discovery-system/infra/github-actions-deploy-policy.json)
+3. Create the Lambda execution role with:
+   - trust policy: [infra/lambda-execution-trust-policy.json](/Users/arda/Desktop/development/job-discovery-system/infra/lambda-execution-trust-policy.json)
+   - logging policy: [infra/lambda-execution-logging-policy.json](/Users/arda/Desktop/development/job-discovery-system/infra/lambda-execution-logging-policy.json)
+   - secrets policy: [infra/lambda-execution-secrets-policy.json](/Users/arda/Desktop/development/job-discovery-system/infra/lambda-execution-secrets-policy.json)
+4. Create the EventBridge Scheduler invoke role with:
+   - trust policy: [infra/eventbridge-scheduler-trust-policy.json](/Users/arda/Desktop/development/job-discovery-system/infra/eventbridge-scheduler-trust-policy.json)
+   - invoke policy: [infra/eventbridge-scheduler-invoke-policy.json](/Users/arda/Desktop/development/job-discovery-system/infra/eventbridge-scheduler-invoke-policy.json)
+5. Set GitHub repository variables:
+   - `AWS_REGION`
+   - `LAMBDA_FUNCTION_NAME`
+6. Set the GitHub repository secret:
+   - `AWS_DEPLOY_ROLE_ARN`
+7. Push to `main` or run the `Deploy Lambda` workflow manually.
+
+The workflow will:
+
+- install dependencies
+- compile TypeScript
+- prepare `build/lambda/`
+- install production dependencies into the Lambda package
+- zip `build/lambda.zip`
+- update the target Lambda code and configuration
+
+The workflow currently enforces:
+
+- runtime: `nodejs24.x`
+- handler: `handler/discover.handler`
+- timeout: `5` seconds
+
+Additional IAM setup details live in [infra/README.md](/Users/arda/Desktop/development/job-discovery-system/infra/README.md).
+
+## Use
+
+### Local setup
+
+```bash
+npm ci
+npm run build
+npm test
+```
+
+### Local smoke invocation
+
+Smoke mode is the default and requires no discovery credentials:
+
+```bash
+node -e "const { handler } = require('./dist/handler/discover'); handler({}, { awsRequestId: 'local-smoke' }).then(console.log).catch((error) => { console.error(error); process.exit(1); });"
+```
+
+Expected response body:
 
 ```json
 {"message":"ok","mode":"smoke"}
 ```
 
-You can later invoke the Lambda with:
+### Local discover invocation
 
-```json
-{"mode":"discover"}
+Discover mode currently runs the Exa retrieval, normalization, title filter, and company-grouping path. It does not write to GitHub yet.
+
+Set one of:
+
+- `EXA_SECRET_ID` for AWS Secrets Manager-backed runs
+- `EXA_API_KEY` for local bootstrap only
+
+Optional runtime variables:
+
+- `APP_ENV`: `dev` or `prod`
+- `LOG_LEVEL`: `debug`, `info`, `warn`, or `error`
+
+Example:
+
+```bash
+APP_ENV=dev LOG_LEVEL=info EXA_API_KEY=your-key-here npm run build
+node -e "const { handler } = require('./dist/handler/discover'); handler({ mode: 'discover' }, { awsRequestId: 'local-discover' }).then(console.log).catch((error) => { console.error(error); process.exit(1); });"
 ```
 
-That path currently returns a placeholder response and log line so the application skeleton can evolve without losing the fast smoke test.
-
-## Runtime configuration
-
-The Lambda now loads a minimal typed config from environment variables:
-
-- `APP_ENV`: `dev` or `prod`, defaults to `dev`
-- `LOG_LEVEL`: `debug`, `info`, `warn`, or `error`, defaults to `info`
-- `EXA_SECRET_ID`: preferred for `discover` mode, points to an AWS Secrets Manager secret
-- `EXA_API_KEY`: fallback for local development or temporary bootstrap only
-
-Smoke mode does not require any GitHub or discovery-specific runtime configuration yet. The invocation logs include a sanitized config summary so deploys are still easy to validate without exposing secrets.
-
-For this project, the intended production source of truth for API credentials is AWS Secrets Manager. The Lambda now prefers `EXA_SECRET_ID` and expects the referenced secret JSON to contain:
+You can also override the current prototype search and title filter inputs per invocation:
 
 ```json
 {
-  "EXA_API_KEY": "your-api-key"
+  "mode": "discover",
+  "exaSearch": {
+    "query": "site:jobs.lever.co platform engineer remote typescript",
+    "numResults": 5
+  },
+  "titleFilter": {
+    "include": ["platform", "backend", "typescript"],
+    "exclude": ["senior manager", "designer"]
+  }
 }
 ```
 
-Use plain `EXA_API_KEY` only as a minimal local-development or temporary bootstrap path.
+### Deployed usage
 
-## GitHub Actions deployment
+After deployment, invoke the Lambda with one of these payloads:
 
-The workflow at `.github/workflows/deploy-lambda.yml` deploys on pushes to `main` and on manual runs.
+- smoke:
 
-It:
-
-1. installs dependencies
-2. builds TypeScript into `dist/`
-3. packages the compiled Lambda code into `build/lambda.zip`
-4. assumes an AWS role via GitHub OIDC
-5. updates the target Lambda function code
-6. enforces `nodejs24.x`, `handler/discover.handler`, and a 5-second timeout
-
-## Required GitHub configuration
-
-Repository variables:
-
-- `AWS_REGION`: target AWS region, for example `eu-central-1`
-- `LAMBDA_FUNCTION_NAME`: existing Lambda function name, for example `job-discovery-system-discover`
-
-Repository secret:
-
-- `AWS_DEPLOY_ROLE_ARN`: IAM role ARN that GitHub Actions should assume
-
-## Required AWS setup
-
-Create an IAM role trusted by GitHub's OIDC provider and grant it at least:
-
-- `lambda:UpdateFunctionCode`
-- `lambda:UpdateFunctionConfiguration`
-- `lambda:GetFunctionConfiguration`
-
-The trust policy should scope access to this repository and branch.
-
-Paste-ready examples are included here:
-
-- [github-actions-oidc-trust-policy.json](/Users/arda/Desktop/development/job-discovery-system/infra/github-actions-oidc-trust-policy.json)
-- [github-actions-deploy-policy.json](/Users/arda/Desktop/development/job-discovery-system/infra/github-actions-deploy-policy.json)
-- [lambda-execution-secrets-policy.json](/Users/arda/Desktop/development/job-discovery-system/infra/lambda-execution-secrets-policy.json)
-- [eventbridge-scheduler-trust-policy.json](/Users/arda/Desktop/development/job-discovery-system/infra/eventbridge-scheduler-trust-policy.json)
-- [eventbridge-scheduler-invoke-policy.json](/Users/arda/Desktop/development/job-discovery-system/infra/eventbridge-scheduler-invoke-policy.json)
-- [infra/README.md](/Users/arda/Desktop/development/job-discovery-system/infra/README.md)
-
-Replace these placeholders before creating the role and policy:
-- `<AWS_ACCOUNT_ID>`
-
-Suggested setup sequence:
-
-1. In AWS IAM, add the GitHub OIDC identity provider for `https://token.actions.githubusercontent.com` if it does not already exist.
-2. Create an IAM role for GitHub Actions using `infra/github-actions-oidc-trust-policy.json` as the trust relationship.
-3. Create and attach a policy using `infra/github-actions-deploy-policy.json`.
-4. Put the new role ARN into the GitHub repository secret `AWS_DEPLOY_ROLE_ARN`.
-5. Set GitHub repository variables `AWS_REGION` and `LAMBDA_FUNCTION_NAME`.
-6. Push to `main` or run the `Deploy Lambda` workflow manually.
-
-If your deploy branch is not `main`, change the `token.actions.githubusercontent.com:sub` value in the trust policy to the exact branch ref you want to allow.
-
-## Local verification
-
-```bash
-npm ci
-npm run build
-npm run package:lambda
+```json
+{}
 ```
 
-This produces compiled output in `dist/` and a deployable package directory in `build/lambda/`.
+- discover:
+
+```json
+{
+  "mode": "discover"
+}
+```
+
+The deployed function is intended to be triggered on a schedule through EventBridge Scheduler once the target Lambda and invoke role are wired.
+
+## Current Status
+
+- Working today: smoke path, typed config loading, Secrets Manager integration, Exa search adapter, title filtering, company grouping, characterization tests, GitHub Actions deploy workflow.
+- Still to implement: append-safe `portals.yml` writer, GitHub Contents API merge-on-write flow, seen-cache persistence, broader source adapters, and final deterministic write path.
