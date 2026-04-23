@@ -4,10 +4,6 @@ import {
   loadDiscoverConfig,
   summarizeAppConfig
 } from "../config/env";
-import { groupCandidatesByCompany } from "../domain/company-grouper";
-import {
-  evaluateCandidates
-} from "../domain/filters/pipeline";
 import {
   createTitleKeywordFilter,
   DEFAULT_TITLE_KEYWORD_FILTER,
@@ -19,6 +15,7 @@ import {
   type ExaSearchInput,
 } from "../sources/search/exa";
 import type { Logger } from "../util/logger";
+import { runAggregationPipeline } from "../domain/aggregation/pipeline";
 
 export type DiscoverMode = "smoke" | "discover";
 
@@ -178,15 +175,12 @@ const runDiscoveryPath = async (
 
   const exaResponse = await exaSearchAdapter.search(exaSearchInput);
   const normalizedResults = exaSearchAdapter.normalizeResults(exaResponse.results);
-  const evaluations = evaluateCandidates(normalizedResults, [
-    createTitleKeywordFilter(titleKeywordFilterConfig)
-  ]);
-  const includedResults = evaluations
-    .filter((evaluation) => evaluation.accepted)
-    .map((evaluation) => evaluation.candidate);
-  const groupedCompanies = groupCandidatesByCompany(includedResults);
-  const excludedResults = evaluations
-    .filter((evaluation) => !evaluation.accepted)
+  const { accepted, grouped, excluded } = runAggregationPipeline(
+    normalizedResults,
+    [createTitleKeywordFilter(titleKeywordFilterConfig)]
+  );
+
+  const excludedResults = excluded
     .slice(0, 3)
     .map((evaluation) => ({
       excludedBy: evaluation.excludedBy,
@@ -201,17 +195,17 @@ const runDiscoveryPath = async (
   });
 
   context.logger.info("title_keyword_filter_completed", {
-    excludedCount: evaluations.length - includedResults.length,
+    excludedCount: excluded.length,
     includeKeywords: titleKeywordFilterConfig.include,
-    includedCount: includedResults.length,
+    includedCount: accepted.length,
     excludeKeywords: titleKeywordFilterConfig.exclude,
-    includedResults: includedResults.slice(0, 3),
+    includedResults: accepted.slice(0, 3),
     excludedResults
   });
 
   context.logger.info("company_grouping_completed", {
-    groupedCompanyCount: groupedCompanies.length,
-    groupedCompanies: groupedCompanies.slice(0, 3)
+    groupedCompanyCount: grouped.length,
+    groupedCompanies: grouped.slice(0, 3)
   });
 
   return {
