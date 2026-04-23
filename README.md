@@ -79,7 +79,7 @@ The workflow currently enforces:
 - handler: `handler/discover.handler`
 - timeout: `5` seconds
 
-Additional IAM setup details live in [infra/README.md](/Users/arda/Desktop/development/job-discovery-system/infra/README.md).
+Additional IAM setup details live in [infra/README.md](/Users/arda/Desktop/development/job-discovery-system/infra/README.md)
 
 ## Use
 
