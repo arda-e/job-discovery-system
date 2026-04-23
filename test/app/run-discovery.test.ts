@@ -226,16 +226,20 @@ describe("runDiscovery", () => {
     ).toMatchObject({
       level: "info",
       meta: {
-        groupedCompanyCount: 1,
-        groupedCompanies: [
+        companyCandidateCount: 1,
+        companyCandidates: [
           {
             companyName: "Acme",
             companySlug: "acme",
+            entryKind: "lead",
             evidenceCount: 2,
-            sampleTitles: [
+            highlightPreview: "Build TypeScript services",
+            matchedTitles: [
               "Software Engineer - ACME",
               "Full Stack Engineer - ACME"
             ],
+            portalUrl: "https://jobs.acme.com/acme/software-engineer",
+            sourceType: "company-careers",
             sourceUrls: [
               "https://jobs.acme.com/acme/software-engineer",
               "https://jobs.acme.com/acme/full-stack-engineer"

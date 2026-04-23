@@ -1,13 +1,8 @@
-import { groupCandidatesByCompany } from "../company-grouper";
+import type { DiscoveryCompanyCandidate } from "../../contract/discovery-company-candidate";
 import type { DiscoveryCandidate } from "../discovery-candidate";
-import type { GroupedCompanyCandidate } from "../company-grouper";
-
-/**
- * Stage that groups candidates by company.
- * Wraps the existing groupCandidatesByCompany function to provide a stage interface.
- */
+import { normalizeToCompanyCandidates } from "../company-grouper";
 export const companyGroupingStage = (
   candidates: DiscoveryCandidate[]
-): GroupedCompanyCandidate[] => {
-  return groupCandidatesByCompany(candidates);
+): DiscoveryCompanyCandidate[] => {
+  return normalizeToCompanyCandidates(candidates);
 };

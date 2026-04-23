@@ -175,7 +175,7 @@ const runDiscoveryPath = async (
 
   const exaResponse = await exaSearchAdapter.search(exaSearchInput);
   const normalizedResults = exaSearchAdapter.normalizeResults(exaResponse.results);
-  const { accepted, grouped, excluded } = runAggregationPipeline(
+  const { accepted, companyCandidates, excluded } = runAggregationPipeline(
     normalizedResults,
     [createTitleKeywordFilter(titleKeywordFilterConfig)]
   );
@@ -204,8 +204,8 @@ const runDiscoveryPath = async (
   });
 
   context.logger.info("company_grouping_completed", {
-    groupedCompanyCount: grouped.length,
-    groupedCompanies: grouped.slice(0, 3)
+    companyCandidateCount: companyCandidates.length,
+    companyCandidates: companyCandidates.slice(0, 3)
   });
 
   return {

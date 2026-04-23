@@ -1,7 +1,8 @@
 import type { DiscoveryCandidate } from "../discovery-candidate";
 import type { CandidateFilter, CandidateEvaluation } from "../filters/types";
+import type { DiscoveryCompanyCandidate } from "../../contract/discovery-company-candidate";
 
-export type { GroupedCompanyCandidate } from "../company-grouper";
+export type { DiscoveryCompanyCandidate } from "../../contract/discovery-company-candidate";
 
 export type AcceptedCandidatesStageResult = {
   accepted: DiscoveryCandidate[];
@@ -11,7 +12,7 @@ export type AcceptedCandidatesStageResult = {
 export type AggregationPipelineResult = {
   accepted: DiscoveryCandidate[];
   excluded: CandidateEvaluation[];
-  grouped: import("../company-grouper").GroupedCompanyCandidate[];
+  companyCandidates: DiscoveryCompanyCandidate[];
 };
 
 export type StageInput = {

@@ -24,7 +24,7 @@ describe("runAggregationPipeline", () => {
     jest.clearAllMocks();
   });
 
-  it("returns accepted, grouped, and excluded results for mixed candidates", () => {
+  it("returns accepted, companyCandidates, and excluded results for mixed candidates", () => {
     const result = runAggregationPipeline(
       [
         {
@@ -56,25 +56,31 @@ describe("runAggregationPipeline", () => {
       ],
       excluded: [
         {
+          accepted: false,
+          candidate: {
+            title: "Senior Software Engineer - ACME",
+            url: "https://jobs.acme.com/acme/senior-software-engineer"
+          },
           excludedBy: "title-filter",
-          reason: "senior roles excluded",
-          title: "Senior Software Engineer - ACME",
-          url: "https://jobs.acme.com/acme/senior-software-engineer"
+          reason: "senior roles excluded"
         }
       ],
-      grouped: [
+      companyCandidates: [
         {
-          companyName: "Acme",
           companySlug: "acme",
-          evidenceCount: 2,
-          sampleTitles: [
+          companyName: "Acme",
+          portalUrl: "https://jobs.acme.com/acme/software-engineer",
+          sourceType: "company-careers",
+          entryKind: "lead",
+          matchedTitles: [
             "Software Engineer - ACME",
             "Full Stack Engineer - ACME"
           ],
           sourceUrls: [
             "https://jobs.acme.com/acme/software-engineer",
             "https://jobs.acme.com/acme/full-stack-engineer"
-          ]
+          ],
+          evidenceCount: 2
         }
       ]
     });
@@ -95,20 +101,26 @@ describe("runAggregationPipeline", () => {
       [includeAllFilter]
     );
 
-    expect(result.grouped).toEqual([
+    expect(result.companyCandidates).toEqual([
       {
-        companyName: "Acme",
         companySlug: "acme",
-        evidenceCount: 1,
-        sampleTitles: ["Software Engineer - ACME"],
-        sourceUrls: ["https://jobs.acme.com/acme/software-engineer"]
+        companyName: "Acme",
+        portalUrl: "https://jobs.acme.com/acme/software-engineer",
+        sourceType: "company-careers",
+        entryKind: "lead",
+        matchedTitles: ["Software Engineer - ACME"],
+        sourceUrls: ["https://jobs.acme.com/acme/software-engineer"],
+        evidenceCount: 1
       },
       {
-        companyName: "Beta",
         companySlug: "beta",
-        evidenceCount: 1,
-        sampleTitles: ["Software Engineer - Beta"],
-        sourceUrls: ["https://jobs.beta.com/beta/software-engineer"]
+        companyName: "Beta",
+        portalUrl: "https://jobs.beta.com/beta/software-engineer",
+        sourceType: "company-careers",
+        entryKind: "lead",
+        matchedTitles: ["Software Engineer - Beta"],
+        sourceUrls: ["https://jobs.beta.com/beta/software-engineer"],
+        evidenceCount: 1
       }
     ]);
   });
@@ -117,7 +129,7 @@ describe("runAggregationPipeline", () => {
     expect(runAggregationPipeline([], [includeAllFilter])).toEqual({
       accepted: [],
       excluded: [],
-      grouped: []
+      companyCandidates: []
     });
   });
 
@@ -134,10 +146,10 @@ describe("runAggregationPipeline", () => {
 
     expect(result.excluded).toEqual([]);
     expect(result.accepted).toHaveLength(1);
-    expect(result.grouped).toHaveLength(1);
+    expect(result.companyCandidates).toHaveLength(1);
   });
 
-  it("returns empty accepted and grouped arrays when all candidates are rejected", () => {
+  it("returns empty accepted and companyCandidates arrays when all candidates are rejected", () => {
     const excludeAllFilter: CandidateFilter = {
       evaluate: jest.fn(() => ({
         kind: "exclude",
@@ -160,13 +172,16 @@ describe("runAggregationPipeline", () => {
       accepted: [],
       excluded: [
         {
+          accepted: false,
+          candidate: {
+            title: "Software Engineer - ACME",
+            url: "https://jobs.acme.com/acme/software-engineer"
+          },
           excludedBy: "exclude-all",
-          reason: "all roles excluded",
-          title: "Software Engineer - ACME",
-          url: "https://jobs.acme.com/acme/software-engineer"
+          reason: "all roles excluded"
         }
       ],
-      grouped: []
+      companyCandidates: []
     });
   });
 });

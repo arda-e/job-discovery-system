@@ -9,11 +9,11 @@ export const runAggregationPipeline = (
   filters: CandidateFilter[]
 ): AggregationPipelineResult => {
   const { accepted, excluded } = acceptedCandidatesStage(candidates, filters);
-  const grouped = companyGroupingStage(accepted);
+  const companyCandidates = companyGroupingStage(accepted);
 
   return {
     accepted,
     excluded,
-    grouped
+    companyCandidates
   };
 };
