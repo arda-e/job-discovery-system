@@ -5,10 +5,20 @@ import {
   summarizeAppConfig
 } from "../config/env";
 import {
+  type DiscoveryProfile,
+  loadDiscoveryProfile,
+  parseDiscoveryProfile
+} from "../config/discovery-profile";
+import {
   createTitleKeywordFilter,
   DEFAULT_TITLE_KEYWORD_FILTER,
   type TitleKeywordFilterConfig
 } from "../domain/filters/title-keyword-filter";
+import {
+  generateDiscoveryQuery,
+  resolveExaSearchInput as resolveExaInputFromQuery,
+  type ExaTuningDefaults
+} from "../domain/query-generation";
 import { secretsService } from "../integrations/aws/secrets";
 import {
   ExaSearchAdapter,
@@ -22,6 +32,7 @@ export type DiscoverMode = "smoke" | "discover";
 export type DiscoverInvocation = {
   exaSearch?: Partial<ExaSearchInput>;
   mode?: DiscoverMode;
+  profile?: Partial<DiscoveryProfile>;
   titleFilter?: Partial<TitleKeywordFilterConfig>;
 };
 
@@ -46,11 +57,7 @@ export type DiscoveryRunContext = {
   titleKeywordFilterConfig?: TitleKeywordFilterConfig;
 };
 
-const EXA_DISCOVER_QUERY =
-  "site:jobs.lever.co software engineer remote typescript";
-
-const DEFAULT_EXA_SEARCH_INPUT: ExaSearchInput = {
-  query: EXA_DISCOVER_QUERY,
+const DEFAULT_EXA_TUNING_DEFAULTS: ExaTuningDefaults = {
   maxCharacters: 1_500,
   numResults: 3,
   type: "deep"
@@ -71,19 +78,6 @@ const resolveMode = (invocation: DiscoverInvocation): DiscoverMode =>
   invocation.mode ?? "smoke";
 
 /**
- * Resolves Exa search parameters from the invocation event with safe defaults.
- */
-const resolveExaSearchInput = (
-  invocation: DiscoverInvocation
-): ExaSearchInput => ({
-  query: invocation.exaSearch?.query ?? DEFAULT_EXA_SEARCH_INPUT.query,
-  maxCharacters:
-    invocation.exaSearch?.maxCharacters ?? DEFAULT_EXA_SEARCH_INPUT.maxCharacters,
-  numResults: invocation.exaSearch?.numResults ?? DEFAULT_EXA_SEARCH_INPUT.numResults,
-  type: invocation.exaSearch?.type ?? DEFAULT_EXA_SEARCH_INPUT.type
-});
-
-/**
  * Resolves title filter parameters from the invocation event with safe defaults.
  */
 const resolveTitleKeywordFilterConfig = (
@@ -93,6 +87,133 @@ const resolveTitleKeywordFilterConfig = (
     invocation.titleFilter?.exclude ?? DEFAULT_TITLE_KEYWORD_FILTER.exclude,
   include:
     invocation.titleFilter?.include ?? DEFAULT_TITLE_KEYWORD_FILTER.include
+});
+
+/**
+ * Validates the explicit query override, rejecting blank or whitespace-only values.
+ */
+const validateExplicitQueryOverride = (
+  query: string | undefined
+): string | undefined => {
+  if (query === undefined) {
+    return undefined;
+  }
+  if (query.trim().length === 0) {
+    throw new Error(
+      "Invalid discovery invocation: explicit query override must not be blank"
+    );
+  }
+  return query;
+};
+
+/**
+ * Validates Exa tuning overrides, rejecting non-positive numeric values.
+ */
+const validateExaTuningOverrides = (
+  overrides: Partial<ExaSearchInput> | undefined
+): Partial<ExaSearchInput> | undefined => {
+  if (!overrides) {
+    return undefined;
+  }
+
+  const validated: Partial<ExaSearchInput> = { ...overrides };
+
+  if (validated.numResults !== undefined && validated.numResults <= 0) {
+    throw new Error(
+      "Invalid discovery invocation: numResults must be a positive integer"
+    );
+  }
+
+  if (validated.maxCharacters !== undefined && validated.maxCharacters <= 0) {
+    throw new Error(
+      "Invalid discovery invocation: maxCharacters must be a positive integer"
+    );
+  }
+
+  return validated;
+};
+
+/**
+ * Resolves the discovery profile from environment defaults and invocation overrides.
+ */
+const resolveDiscoveryProfile = (
+  invocation: DiscoverInvocation
+): DiscoveryProfile => {
+  const envProfile = loadDiscoveryProfile();
+
+  if (!invocation.profile) {
+    return envProfile;
+  }
+
+  const overrideProfile: Record<string, string | undefined> = {};
+
+  if (invocation.profile.roleKeywords) {
+    overrideProfile.roleKeywords = invocation.profile.roleKeywords.join(",");
+  }
+  if (invocation.profile.excludedRoleKeywords) {
+    overrideProfile.excludedRoleKeywords =
+      invocation.profile.excludedRoleKeywords.join(",");
+  }
+  if (invocation.profile.locationConstraints) {
+    overrideProfile.locationConstraints =
+      invocation.profile.locationConstraints.join(",");
+  }
+  if (invocation.profile.companyPreferences) {
+    overrideProfile.companyPreferences =
+      invocation.profile.companyPreferences.join(",");
+  }
+  if (invocation.profile.productSurfacePreferences) {
+    overrideProfile.productSurfacePreferences =
+      invocation.profile.productSurfacePreferences.join(",");
+  }
+  if (invocation.profile.endToEndOwnership !== undefined) {
+    overrideProfile.endToEndOwnership = String(
+      invocation.profile.endToEndOwnership
+    );
+  }
+  if (invocation.profile.preferredTechStack) {
+    overrideProfile.preferredTechStack =
+      invocation.profile.preferredTechStack.join(",");
+  }
+
+  const merged: Record<string, string | undefined> = {
+    roleKeywords:
+      overrideProfile.roleKeywords ?? envProfile.roleKeywords.join(","),
+    excludedRoleKeywords:
+      overrideProfile.excludedRoleKeywords ??
+      envProfile.excludedRoleKeywords.join(","),
+    locationConstraints:
+      overrideProfile.locationConstraints ??
+      envProfile.locationConstraints.join(","),
+    companyPreferences:
+      overrideProfile.companyPreferences ??
+      envProfile.companyPreferences.join(","),
+    productSurfacePreferences:
+      overrideProfile.productSurfacePreferences ??
+      envProfile.productSurfacePreferences.join(","),
+    endToEndOwnership:
+      overrideProfile.endToEndOwnership ??
+      String(envProfile.endToEndOwnership),
+    preferredTechStack:
+      overrideProfile.preferredTechStack ??
+      envProfile.preferredTechStack.join(",")
+  };
+
+  return parseDiscoveryProfile(merged);
+};
+
+/**
+ * Summarizes a resolved profile for safe logging.
+ */
+const summarizeProfile = (
+  profile: DiscoveryProfile
+): Record<string, unknown> => ({
+  roleKeywordCount: profile.roleKeywords.length,
+  excludedRoleKeywordCount: profile.excludedRoleKeywords.length,
+  locationConstraintCount: profile.locationConstraints.length,
+  companyPreferenceCount: profile.companyPreferences.length,
+  hasOwnershipPreference: profile.endToEndOwnership,
+  preferredTechStackCount: profile.preferredTechStack.length
 });
 
 /**
@@ -114,11 +235,31 @@ const createDiscoveryRunContext = async (
   }
 
   const discoverConfig = loadDiscoverConfig();
-  const exaSearchInput = resolveExaSearchInput(invocation);
   const titleKeywordFilterConfig = resolveTitleKeywordFilterConfig(invocation);
+
+  const profile = resolveDiscoveryProfile(invocation);
+  const { query: generatedQuery } = generateDiscoveryQuery(profile);
+  const explicitQueryOverride = validateExplicitQueryOverride(
+    invocation.exaSearch?.query
+  );
+  const tuningOverrides = validateExaTuningOverrides(invocation.exaSearch);
+
+  const querySource = explicitQueryOverride ? "override" : "generated";
+  const exaSearchInput = resolveExaInputFromQuery({
+    explicitQueryOverride,
+    generatedQuery,
+    tuningOverrides,
+    tuningDefaults: DEFAULT_EXA_TUNING_DEFAULTS
+  });
+
   const exaApiKey = discoverConfig.exaSecretId
     ? await secretsService.getExaApiKey(discoverConfig.exaSecretId)
     : discoverConfig.exaApiKey;
+
+  dependencies.logger.info("discovery_profile_resolved", {
+    profile: summarizeProfile(profile),
+    querySource
+  });
 
   return {
     appConfig: dependencies.config,
@@ -149,7 +290,7 @@ const runSmokePath = async (logger: Logger): Promise<DiscoverResult> => {
 };
 
 /**
- * Placeholder application path for the future discovery workflow.
+ * Application path for the discovery workflow using profile-first query generation.
  */
 const runDiscoveryPath = async (
   context: DiscoveryRunContext

@@ -56,6 +56,13 @@ describe("runDiscovery", () => {
     process.env = { ...originalEnv };
     delete process.env.EXA_API_KEY;
     delete process.env.EXA_SECRET_ID;
+    delete process.env.DISCOVERY_ROLE_KEYWORDS;
+    delete process.env.DISCOVERY_EXCLUDED_ROLE_KEYWORDS;
+    delete process.env.DISCOVERY_LOCATION_CONSTRAINTS;
+    delete process.env.DISCOVERY_COMPANY_PREFERENCES;
+    delete process.env.DISCOVERY_PRODUCT_SURFACE_PREFERENCE;
+    delete process.env.DISCOVERY_END_TO_END_OWNERSHIP;
+    delete process.env.DISCOVERY_PREFERRED_TECH_STACK;
   });
 
   afterEach(() => {
@@ -110,6 +117,8 @@ describe("runDiscovery", () => {
 
   it("runs the discover path with a direct API key", async () => {
     process.env.EXA_API_KEY = "direct-exa-key";
+    process.env.DISCOVERY_ROLE_KEYWORDS = "software engineer, typescript";
+    process.env.DISCOVERY_LOCATION_CONSTRAINTS = "remote";
     searchMock.mockResolvedValue({
       results: [
         {
@@ -148,7 +157,7 @@ describe("runDiscovery", () => {
     expect(getExaApiKeySpy).not.toHaveBeenCalled();
     expect(ExaMock).toHaveBeenCalledWith("direct-exa-key");
     expect(searchMock).toHaveBeenCalledWith(
-      "site:jobs.lever.co software engineer remote typescript",
+      "software engineer typescript remote",
       {
         contents: {
           highlights: {
@@ -180,7 +189,7 @@ describe("runDiscovery", () => {
       meta: {
         maxCharacters: 1_500,
         numResults: 3,
-        query: "site:jobs.lever.co software engineer remote typescript",
+        query: "software engineer typescript remote",
         type: "deep"
       }
     });
@@ -252,6 +261,7 @@ describe("runDiscovery", () => {
 
   it("uses the secret manager when EXA_SECRET_ID is provided", async () => {
     process.env.EXA_SECRET_ID = "discover-secret";
+    process.env.DISCOVERY_ROLE_KEYWORDS = "engineer";
     getExaApiKeySpy.mockResolvedValue("secret-key");
     searchMock.mockResolvedValue({ results: [] });
     const loggerHarness = createLoggerHarness();
@@ -269,6 +279,7 @@ describe("runDiscovery", () => {
 
   it("applies event overrides without mutating shared defaults", async () => {
     process.env.EXA_API_KEY = "direct-exa-key";
+    process.env.DISCOVERY_ROLE_KEYWORDS = "software engineer, typescript";
     searchMock.mockResolvedValue({
       results: [
         {
@@ -317,6 +328,7 @@ describe("runDiscovery", () => {
   });
 
   it("fails fast when discover credentials are missing", async () => {
+    process.env.DISCOVERY_ROLE_KEYWORDS = "engineer";
     const loggerHarness = createLoggerHarness();
 
     await expect(
@@ -335,6 +347,7 @@ describe("runDiscovery", () => {
 
   it("propagates secret loading failures", async () => {
     process.env.EXA_SECRET_ID = "discover-secret";
+    process.env.DISCOVERY_ROLE_KEYWORDS = "engineer";
     getExaApiKeySpy.mockRejectedValue(new Error("secret lookup failed"));
     const loggerHarness = createLoggerHarness();
 
@@ -346,6 +359,168 @@ describe("runDiscovery", () => {
         { config, logger: loggerHarness.logger }
       )
     ).rejects.toThrow("secret lookup failed");
+
+    expect(searchMock).not.toHaveBeenCalled();
+  });
+
+  it("generates query from env profile and calls adapter with it", async () => {
+    process.env.EXA_API_KEY = "direct-exa-key";
+    process.env.DISCOVERY_ROLE_KEYWORDS = "data engineer";
+    process.env.DISCOVERY_LOCATION_CONSTRAINTS = "remote";
+    process.env.DISCOVERY_END_TO_END_OWNERSHIP = "true";
+    process.env.DISCOVERY_PREFERRED_TECH_STACK = "python";
+    searchMock.mockResolvedValue({ results: [] });
+    const loggerHarness = createLoggerHarness();
+
+    await runDiscovery(
+      { mode: "discover" },
+      { config, logger: loggerHarness.logger }
+    );
+
+    expect(searchMock).toHaveBeenCalledWith(
+      "data engineer remote end to end ownership python",
+      expect.any(Object)
+    );
+  });
+
+  it("validated invocation profile overrides change the generated query", async () => {
+    process.env.EXA_API_KEY = "direct-exa-key";
+    process.env.DISCOVERY_ROLE_KEYWORDS = "software engineer";
+    process.env.DISCOVERY_LOCATION_CONSTRAINTS = "remote";
+    searchMock.mockResolvedValue({ results: [] });
+    const loggerHarness = createLoggerHarness();
+
+    await runDiscovery(
+      {
+        mode: "discover",
+        profile: {
+          roleKeywords: ["data scientist"],
+          locationConstraints: ["united states"]
+        }
+      },
+      { config, logger: loggerHarness.logger }
+    );
+
+    expect(searchMock).toHaveBeenCalledWith(
+      "data scientist united states",
+      expect.any(Object)
+    );
+  });
+
+  it("explicit query override replaces the generated query", async () => {
+    process.env.EXA_API_KEY = "direct-exa-key";
+    process.env.DISCOVERY_ROLE_KEYWORDS = "software engineer";
+    searchMock.mockResolvedValue({ results: [] });
+    const loggerHarness = createLoggerHarness();
+
+    await runDiscovery(
+      {
+        exaSearch: { query: "site:jobs.lever.co machine learning engineer" },
+        mode: "discover"
+      },
+      { config, logger: loggerHarness.logger }
+    );
+
+    expect(searchMock).toHaveBeenCalledWith(
+      "site:jobs.lever.co machine learning engineer",
+      expect.any(Object)
+    );
+  });
+
+  it("smoke mode does not load or validate discovery profile fields", async () => {
+    const loggerHarness = createLoggerHarness();
+    const setTimeoutSpy = jest
+      .spyOn(global, "setTimeout")
+      .mockImplementation(((callback: (...args: unknown[]) => void) => {
+        callback();
+        return 0 as unknown as NodeJS.Timeout;
+      }) as typeof setTimeout);
+
+    const result = await runDiscovery(
+      { mode: "smoke" },
+      { config, logger: loggerHarness.logger }
+    );
+
+    expect(result.mode).toBe("smoke");
+    expect(searchMock).not.toHaveBeenCalled();
+
+    setTimeoutSpy.mockRestore();
+  });
+
+  it("partial Exa tuning overrides update numResults without discarding generated query", async () => {
+    process.env.EXA_API_KEY = "direct-exa-key";
+    process.env.DISCOVERY_ROLE_KEYWORDS = "engineer";
+    searchMock.mockResolvedValue({ results: [] });
+    const loggerHarness = createLoggerHarness();
+
+    await runDiscovery(
+      {
+        exaSearch: { numResults: 5 },
+        mode: "discover"
+      },
+      { config, logger: loggerHarness.logger }
+    );
+
+    expect(searchMock).toHaveBeenCalledWith(
+      "engineer",
+      {
+        contents: { highlights: { maxCharacters: 1_500 } },
+        numResults: 5,
+        type: "deep"
+      }
+    );
+  });
+
+  it("rejects blank explicit query override", async () => {
+    process.env.EXA_API_KEY = "direct-exa-key";
+    process.env.DISCOVERY_ROLE_KEYWORDS = "engineer";
+    const loggerHarness = createLoggerHarness();
+
+    await expect(
+      runDiscovery(
+        {
+          exaSearch: { query: "   " },
+          mode: "discover"
+        },
+        { config, logger: loggerHarness.logger }
+      )
+    ).rejects.toThrow("explicit query override must not be blank");
+
+    expect(searchMock).not.toHaveBeenCalled();
+  });
+
+  it("rejects malformed invocation profile override with empty roleKeywords", async () => {
+    process.env.EXA_API_KEY = "direct-exa-key";
+    process.env.DISCOVERY_ROLE_KEYWORDS = "engineer";
+    const loggerHarness = createLoggerHarness();
+
+    await expect(
+      runDiscovery(
+        {
+          mode: "discover",
+          profile: { roleKeywords: [] }
+        },
+        { config, logger: loggerHarness.logger }
+      )
+    ).rejects.toThrow("roleKeywords is required");
+
+    expect(searchMock).not.toHaveBeenCalled();
+  });
+
+  it("rejects invalid Exa tuning override with non-positive numResults", async () => {
+    process.env.EXA_API_KEY = "direct-exa-key";
+    process.env.DISCOVERY_ROLE_KEYWORDS = "engineer";
+    const loggerHarness = createLoggerHarness();
+
+    await expect(
+      runDiscovery(
+        {
+          exaSearch: { numResults: 0 },
+          mode: "discover"
+        },
+        { config, logger: loggerHarness.logger }
+      )
+    ).rejects.toThrow("numResults must be a positive integer");
 
     expect(searchMock).not.toHaveBeenCalled();
   });
